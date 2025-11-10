@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "PyDS"
+version = "0.1.0"
+description = "Parse SVG datasheet curves and extract plot coordinates."
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "Dr. Anatolii Tcai"}
+]
+keywords = ["svg", "datasheet", "curves", "extract", "numpy", "matplotlib"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Visualization",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
+dependencies = [
+    "svgpathtools",
+    "numpy",
+    "matplotlib",
+]
+
+[project.urls]
+Homepage = "https://github.com/HereIsAnatolii/PyDS"
+Source = "https://github.com/HereIsAnatolii/PyDS"
+Issues = "https://github.com/HereIsAnatolii/PyDS/issues"
+
+[tool.setuptools]
+py-modules = ["PyDS"]
+packages = ["pyds"]
