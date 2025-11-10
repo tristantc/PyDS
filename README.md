@@ -7,11 +7,12 @@ It is mainly used for tracing the datasheet curves and converting them in ready-
 
 ## 🚀 Features
 
-- Load and parse SVG file containting datasheet curves
-- Identify and extract plot paths.
-- Scale and transform coordinates to match plot dimensions.
-- Visualize individual or all plots.
-- Export coordinate values.
+- Load and parse SVG file containing datasheet curves
+- Identify and extract plot paths (supports multi-segment paths)
+- Scale and transform coordinates to match plot dimensions
+- **Per-path y-axis configuration** for multi-scale plots (dual y-axis support)
+- Visualize individual or all plots
+- Export coordinate values to dictionaries
 
 ---
 
@@ -31,8 +32,10 @@ pip install svgpathtools
 ```
 ---
 ## 🧰 Usage
+
 ### Initialization
-```bash
+
+```python
 from pyds import PyDS
 svg_plot = PyDS(filename="graph.svg", Npoints=100, x=100, y=0, width=100, height=80)
 ```
@@ -42,17 +45,100 @@ svg_plot = PyDS(filename="graph.svg", Npoints=100, x=100, y=0, width=100, height
 -`y` - start y position of the grid box. Keyword argument (can be omitted)
 -`width` - width of the grid box. Keyword argument (can be omitted)
 -`height` - height of the grid box. Keyword argument (can be omitted)
+-`path_params` - dictionary for per-path y-axis configuration. Keyword argument (can be omitted)
+
+### Advanced: Per-Path Y-Axis Configuration
+
+For SVG files with multiple curves on different scales (e.g., dual y-axis plots), use `path_params` to configure each path independently:
+
+```python
+svg_plot = PyDS(
+    "multi_scale_plot.svg", 
+    Npoints=100,
+    x=1,
+    width=1,
+    path_params={
+        0: {'y': 450, 'height': 90},   # Path 0: custom y-start and height
+        1: {'y': 0.5, 'height': 0.1}   # Path 1: different scale
+    }
+)
+```
+
+This is particularly useful when creating dual y-axis plots with matplotlib:
+
+```python
+import matplotlib.pyplot as plt
+
+fig, ax1 = plt.subplots()
+
+# Plot first path on primary y-axis
+ax1.plot(svg_plot.line['x'][0], svg_plot.line['y'][0], 'o-', label='Head')
+ax1.set_ylabel('Head [m]', color='tab:blue')
+
+# Create secondary y-axis for second path
+ax2 = ax1.twinx()
+ax2.plot(svg_plot.line['x'][1], svg_plot.line['y'][1], 's-', label='Efficiency', color='tab:orange')
+ax2.set_ylabel('Efficiency', color='tab:orange')
+
+plt.show()
+```
+
 
 ### Plot All Paths
-```bash
+
+```python
 svg_plot.plot_all(labels=["Line A", "Line B"])
 ```
 
 ### Access Path Values
-```bash
-data = svg_plot.values(0)
+
+Returns extracted coordinate values as a dictionary with 'x' and 'y' keys:
+
+```python
+data = svg_plot.values(0)  # Get data from path 0
 print(data['x'], data['y'])
 ```
+
+### Export to CSV or DataFrame
+
+The extracted data can be easily exported to various formats:
+
+```python
+import pandas as pd
+
+# Extract data from a path
+path0_data = svg_plot.values(0)
+
+# Create DataFrame
+df = pd.DataFrame({
+    'x': path0_data['x'],
+    'y': path0_data['y']
+})
+
+# Export to CSV
+df.to_csv('output/extracted_data.csv', index=False)
+```
+
+---
+
+## 📊 Advanced Features
+
+### Multi-Segment Path Support
+
+PyDS automatically handles complex SVG paths with multiple segments. The tool concatenates all segments and samples points proportionally across the entire path, ensuring accurate representation of complex curves.
+
+### Direct Access to Line Data
+
+For advanced use cases, you can access the raw line data directly:
+
+```python
+# Access x-coordinates for all paths
+all_x = svg_plot.line['x']
+
+# Access y-coordinates for path 0
+path0_y = svg_plot.line['y'][0]
+```
+
 ---
 ## 🔗 Dependencies
 -`svgpathtools`
