@@ -23,9 +23,50 @@ class PyDS:
                 self.path_i.append(i)
         
         # Convert SVG path coordinates to plot coordinates
-        for i in self.path_i:
-            self.line['x'].append([self.kx * (self.paths[i][0].point(t).real - self.x_origin) for t in self.points])
-            self.line['y'].append([self.ky * (self.h_box - self.paths[i][0].point(t).imag + self.y_origin) for t in self.points])
+        for path_idx, i in enumerate(self.path_i):
+            # Get per-path parameters (y_start and height) or use defaults
+            if path_idx in self.path_params:
+                path_y_start = self.path_params[path_idx].get('y', self.y_start)
+                path_height = self.path_params[path_idx].get('height', self.or_height)
+            else:
+                path_y_start = self.y_start
+                path_height = self.or_height
+            
+            # Calculate per-path scaling factor for y-axis
+            path_ky = path_height / self.h_box
+            path_y_origin = self.paths[self.rect_i][1].point(0).imag + path_y_start / path_ky
+            
+            # Handle multi-segment paths by concatenating all segments
+            path_obj = self.paths[i]
+            
+            # Calculate total length of all segments
+            total_length = sum(seg.length() for seg in path_obj)
+            
+            # Sample points proportionally across all segments
+            x_coords = []
+            y_coords = []
+            
+            for t in self.points:
+                # Find which segment this t value corresponds to
+                target_length = t * total_length
+                cumulative_length = 0
+                
+                for seg in path_obj:
+                    seg_length = seg.length()
+                    if cumulative_length + seg_length >= target_length:
+                        # This segment contains our point
+                        local_t = (target_length - cumulative_length) / seg_length if seg_length > 0 else 0
+                        local_t = max(0, min(1, local_t))  # Clamp to [0, 1]
+                        point = seg.point(local_t)
+                        
+                        # Apply per-path coordinate transformation
+                        x_coords.append(self.kx * (point.real - self.x_origin))
+                        y_coords.append(path_ky * (self.h_box - point.imag + path_y_origin))
+                        break
+                    cumulative_length += seg_length
+            
+            self.line['x'].append(x_coords)
+            self.line['y'].append(y_coords)
         
     def plot(self, N, **kwargs):
         import matplotlib.pyplot as plt
@@ -77,7 +118,7 @@ class PyDS:
         self.wsvg = wsvg
         
         # Default plotting parameters
-        self.defKwargs = {    'width': 50,    'height': 50,    'Nplots': 1,    'x': 0,    'y': 0    }
+        self.defKwargs = {    'width': 50,    'height': 50,    'Nplots': 1,    'x': 0,    'y': 0,    'path_params': None    }
         
         # Combine defaults with user kwargs
         kwargs = {**self.defKwargs, **kwargs}
@@ -87,6 +128,10 @@ class PyDS:
         self.height = kwargs['height']
         self.x_start = kwargs['x']
         self.y_start = kwargs['y']
+        
+        # Per-path parameters: dict with path indices as keys, {'y': y_start, 'height': height} as values
+        # Example: path_params={0: {'y': 450, 'height': 90}, 1: {'y': 50, 'height': 10}}
+        self.path_params = kwargs['path_params'] if kwargs['path_params'] is not None else {}
         
         # Internal state
         self.rect_i = None
