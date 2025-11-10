@@ -24,6 +24,25 @@ class PyDS:
         
         # Convert SVG path coordinates to plot coordinates
         for path_idx, i in enumerate(self.path_i):
+            # Determine which rectangle this path uses
+            rect_id = None
+            if path_idx in self.path_params:
+                rect_id = self.path_params[path_idx].get('rect_id', None)
+            
+            # Get the transform for this rectangle (or use default)
+            if rect_id and rect_id in self.rect_transforms:
+                transform = self.rect_transforms[rect_id]
+                kx = transform['kx']
+                x_origin = transform['x_origin']
+                h_box = transform['h_box']
+                y_origin_base = transform['y_origin']
+            else:
+                # Use default rectangle
+                kx = self.kx
+                x_origin = self.x_origin
+                h_box = self.h_box
+                y_origin_base = self.y_origin
+            
             # Get per-path parameters (y_start and height) or use defaults
             if path_idx in self.path_params:
                 path_y_start = self.path_params[path_idx].get('y', self.y_start)
@@ -33,8 +52,8 @@ class PyDS:
                 path_height = self.or_height
             
             # Calculate per-path scaling factor for y-axis
-            path_ky = path_height / self.h_box
-            path_y_origin = self.paths[self.rect_i][1].point(0).imag + path_y_start / path_ky
+            path_ky = path_height / h_box
+            path_y_origin = y_origin_base
             
             # Handle multi-segment paths by concatenating all segments
             path_obj = self.paths[i]
@@ -59,9 +78,9 @@ class PyDS:
                         local_t = max(0, min(1, local_t))  # Clamp to [0, 1]
                         point = seg.point(local_t)
                         
-                        # Apply per-path coordinate transformation
-                        x_coords.append(self.kx * (point.real - self.x_origin))
-                        y_coords.append(path_ky * (self.h_box - point.imag + path_y_origin))
+                        # Apply coordinate transformation using this path's rectangle
+                        x_coords.append(kx * (point.real - x_origin))
+                        y_coords.append(path_ky * (h_box - point.imag + path_y_origin))
                         break
                     cumulative_length += seg_length
             
@@ -87,26 +106,71 @@ class PyDS:
             plt.legend()
         
     def find_rect(self):
-        # Find the bounding box (usually the background rectangle) from SVG
+        # Find ALL rectangles in the SVG and store their transformations
+        rect_indices = []
+        rect_ids = []
+        
         for i, attr in enumerate(self.attributes):
             if attr['id'][:4].lower() == 'rect':
-                self.rect_i = i
+                rect_indices.append(i)
+                rect_ids.append(attr['id'])
         
-        # Extract bounding box real/im coordinates
-        self.w_box = self.paths[self.rect_i][0].point(1).real - self.paths[self.rect_i][0].point(0).real
-        self.h_box = self.paths[self.rect_i][1].point(1).imag - self.paths[self.rect_i][1].point(0).imag
+        # Use first rect as default
+        if rect_indices:
+            self.rect_i = rect_indices[0]
         
-        # Scaling factors from SVG units to plotting units
-        self.kx = self.or_width / self.w_box
-        self.ky = self.or_height / self.h_box
+        # Process each rectangle
+        for idx, rect_id in zip(rect_indices, rect_ids):
+            self.rect_map[rect_id] = idx
+            
+            # Get rectangle-specific parameters if defined
+            if rect_id in self.rect_params:
+                x_start = self.rect_params[rect_id].get('x', self.x_start)
+                y_start = self.rect_params[rect_id].get('y', self.y_start)
+                width = self.rect_params[rect_id].get('width', self.or_width)
+                height = self.rect_params[rect_id].get('height', self.or_height)
+            else:
+                # Use defaults
+                x_start = self.x_start
+                y_start = self.y_start
+                width = self.or_width
+                height = self.or_height
+            
+            # Extract bounding box coordinates
+            w_box = self.paths[idx][0].point(1).real - self.paths[idx][0].point(0).real
+            h_box = self.paths[idx][1].point(1).imag - self.paths[idx][1].point(0).imag
+            
+            # Scaling factors
+            kx = width / w_box
+            ky = height / h_box
+            
+            # Origins
+            x_origin = self.paths[idx][0].point(0).real - x_start / kx
+            y_origin = self.paths[idx][1].point(0).imag + y_start / ky
+            
+            # Store transformation
+            self.rect_transforms[rect_id] = {
+                'kx': kx,
+                'ky': ky,
+                'x_origin': x_origin,
+                'y_origin': y_origin,
+                'w_box': w_box,
+                'h_box': h_box
+            }
         
-        # Origins for transforming coordinate system
-        self.x_origin = self.paths[self.rect_i][0].point(0).real - self.x_start / self.kx
-        self.y_origin = self.paths[self.rect_i][1].point(0).imag + self.y_start / self.ky
-        
-        # For completeness
-        self.x_box = self.x_origin
-        self.y_box = self.h_box
+        # Set default transforms from first rectangle for backward compatibility
+        if rect_ids:
+            default_transform = self.rect_transforms[rect_ids[0]]
+            self.kx = default_transform['kx']
+            self.ky = default_transform['ky']
+            self.x_origin = default_transform['x_origin']
+            self.y_origin = default_transform['y_origin']
+            self.w_box = default_transform['w_box']
+            self.h_box = default_transform['h_box']
+            
+            # For completeness
+            self.x_box = self.x_origin
+            self.y_box = self.h_box
     
     def defaults(self, **kwargs):
         # Load libraries
@@ -118,7 +182,7 @@ class PyDS:
         self.wsvg = wsvg
         
         # Default plotting parameters
-        self.defKwargs = {    'width': 50,    'height': 50,    'Nplots': 1,    'x': 0,    'y': 0,    'path_params': None    }
+        self.defKwargs = {    'width': 50,    'height': 50,    'Nplots': 1,    'x': 0,    'y': 0,    'path_params': None,    'rect_params': None    }
         
         # Combine defaults with user kwargs
         kwargs = {**self.defKwargs, **kwargs}
@@ -129,12 +193,18 @@ class PyDS:
         self.x_start = kwargs['x']
         self.y_start = kwargs['y']
         
-        # Per-path parameters: dict with path indices as keys, {'y': y_start, 'height': height} as values
-        # Example: path_params={0: {'y': 450, 'height': 90}, 1: {'y': 50, 'height': 10}}
+        # Per-path parameters: dict with path indices as keys, can now include 'rect_id'
+        # Example: path_params={0: {'y': 450, 'height': 90, 'rect_id': 'rect1'}}
         self.path_params = kwargs['path_params'] if kwargs['path_params'] is not None else {}
+        
+        # Per-rectangle parameters: dict with rect IDs as keys
+        # Example: rect_params={'rect1': {'x': 0, 'y': 0, 'width': 50, 'height': 100}}
+        self.rect_params = kwargs['rect_params'] if kwargs['rect_params'] is not None else {}
         
         # Internal state
         self.rect_i = None
+        self.rect_map = {}  # Maps rect_id -> index in paths array
+        self.rect_transforms = {}  # Maps rect_id -> {kx, ky, x_origin, y_origin, w_box, h_box}
         self.path_i = []
         self.line = {'x': [], 'y': []}
     

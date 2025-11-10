@@ -11,6 +11,7 @@ It is mainly used for tracing the datasheet curves and converting them in ready-
 - Identify and extract plot paths (supports multi-segment paths)
 - Scale and transform coordinates to match plot dimensions
 - **Per-path y-axis configuration** for multi-scale plots (dual y-axis support)
+- **Multi-rectangle support** for paths with different coordinate systems
 - Visualize individual or all plots
 - Export coordinate values to dictionaries
 
@@ -46,6 +47,7 @@ svg_plot = PyDS(filename="graph.svg", Npoints=100, x=100, y=0, width=100, height
 -`width` - width of the grid box. Keyword argument (can be omitted)
 -`height` - height of the grid box. Keyword argument (can be omitted)
 -`path_params` - dictionary for per-path y-axis configuration. Keyword argument (can be omitted)
+-`rect_params` - dictionary for multi-rectangle coordinate systems. Keyword argument (can be omitted)
 
 ### Advanced: Per-Path Y-Axis Configuration
 
@@ -82,6 +84,33 @@ ax2.set_ylabel('Efficiency', color='tab:orange')
 
 plt.show()
 ```
+
+### Advanced: Multi-Rectangle Coordinate Systems
+
+For SVG files with multiple reference rectangles (grids) with different coordinate systems, use `rect_params` to define each rectangle and link paths to them:
+
+```python
+svg_plot = PyDS(
+    "multi_grid_plot.svg",
+    Npoints=100,
+    rect_params={
+        'rect_primary': {'x': 0, 'y': 0, 'width': 100, 'height': 200},
+        'rect_secondary': {'x': 0, 'y': 0, 'width': 50, 'height': 100}
+    },
+    path_params={
+        0: {'rect_id': 'rect_primary', 'y': 0, 'height': 200},
+        1: {'rect_id': 'rect_secondary', 'y': 0, 'height': 100},
+        2: {'rect_id': 'rect_primary', 'y': 50, 'height': 150}
+    }
+)
+```
+
+**Use cases:**
+- SVG files with separate sub-plots
+- Charts with inset graphs at different scales
+- Multi-panel datasheets with independent coordinate systems
+
+Each path is transformed using its assigned rectangle's coordinate system, allowing accurate extraction from complex multi-grid layouts.
 
 
 ### Plot All Paths
